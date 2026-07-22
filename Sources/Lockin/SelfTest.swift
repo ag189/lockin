@@ -94,6 +94,16 @@ enum SelfTest {
             let running = try await store.runningSession()
             check("appmodel start wrote a session", running != nil)
             check("appmodel start set pomodoro target", running?.targetMin == 25)
+
+            // Clear must empty the visible list (no fallback to a Recent list of the same tasks).
+            await MainActor.run { model.stop(promptOutput: false) }
+            try await Task.sleep(nanoseconds: 400_000_000)
+            let hadToday = await MainActor.run { !model.today.isEmpty }
+            check("appmodel today lists worked task", hadToday)
+            await MainActor.run { model.clearTodayList() }
+            try await Task.sleep(nanoseconds: 400_000_000)
+            let clearedToday = await MainActor.run { model.today.isEmpty }
+            check("appmodel clear empties today", clearedToday)
         } catch {
             check("appmodel start block threw: \(error)", false)
         }

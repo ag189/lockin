@@ -113,21 +113,23 @@ struct IdleView: View {
     }
 
     private var taskList: some View {
-        let showingToday = !model.today.isEmpty
-        let items = showingToday ? model.today : model.recent
+        let items = model.today
         return VStack(alignment: .leading, spacing: 8) {
             if !items.isEmpty {
                 HStack {
-                    Text(showingToday ? "Today" : "Recent")
+                    Text("Today")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     Spacer()
-                    if showingToday {
-                        Button("Clear") { model.clearTodayList() }
-                            .buttonStyle(.plain)
+                    Button {
+                        model.clearTodayList()
+                    } label: {
+                        Label("Clear", systemImage: "xmark.circle")
+                            .labelStyle(.titleAndIcon)
                             .font(.system(size: 11))
-                            .foregroundStyle(.secondary)
                     }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
                 }
                 ForEach(items) { task in
                     Button {
@@ -137,13 +139,13 @@ struct IdleView: View {
                     }
                     .buttonStyle(.plain)
                 }
-                if showingToday, model.today.count > 1 {
+                if model.today.count > 1 {
                     Text("total \(TimeFormatting.compact(seconds: model.today.reduce(0) { $0 + $1.todaySeconds }))")
                         .font(.system(size: 11))
                         .foregroundStyle(.tertiary)
                 }
             } else {
-                Text("Type a task name, then press Return — or set a pomodoro length and Start.")
+                Text("No tasks yet. Type a task name to start, or pick a pomodoro preset below.")
                     .font(.system(size: 13))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

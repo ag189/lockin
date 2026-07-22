@@ -31,7 +31,6 @@ final class AppModel: ObservableObject {
     @Published private(set) var elapsed: TimeInterval = 0
     @Published private(set) var pendingSyncCount: Int = 0
     @Published var screen: PopoverScreen = .main
-    @Published private(set) var recent: [TaskDetail] = []
     @Published private(set) var today: [TaskDetail] = []
     @Published private(set) var searchResults: [TaskDetail] = []
     /// Bumping this token asks the search field to grab focus.
@@ -57,6 +56,7 @@ final class AppModel: ObservableObject {
     private var allTasks: [TaskDetail] = []
     private var tickTimer: Timer?
     private var retryTimer: Timer?
+    private var dayRolloverTimer: Timer?
     private var isSuspended = false
 
     /// Requests the AppKit layer to present the popover (set by AppDelegate).
@@ -83,6 +83,7 @@ final class AppModel: ObservableObject {
         registerPowerObservers()
         await sync.syncPending()
         startRetryTimer()
+        scheduleMidnightRefresh()
     }
 
     private func resumeRunningSession() async {
@@ -135,8 +136,8 @@ final class AppModel: ObservableObject {
         allTasks = (try? await store.searchableTasks()) ?? []
     }
 
+    /// Recomputes the current working-session list (today's tasks after any clear cutoff).
     func refreshRecent() async {
-        recent = (try? await store.recentTasks(limit: 5)) ?? []
         today = (try? await store.todayTasks(clearedAt: todayClearedAt)) ?? []
     }
 
@@ -310,6 +311,7 @@ final class AppModel: ObservableObject {
         silenceAlarm()
         stopTicking()
         active = nil
+        elapsed = 0
         Task {
             _ = try? await store.stopSession(id: current.id)
             if promptOutput {
@@ -441,6 +443,9 @@ final class AppModel: ObservableObject {
         guard isSuspended else { return }
         isSuspended = false
         if active != nil { startTicking() }
+        // Waking may cross a day boundary; recompute today and re-arm the midnight timer.
+        Task { await refreshRecent() }
+        scheduleMidnightRefresh()
     }
 
     // MARK: - Retry timer
@@ -457,6 +462,30 @@ final class AppModel: ObservableObject {
         }
         RunLoop.main.add(timer, forMode: .common)
         retryTimer = timer
+    }
+
+    // MARK: - Day rollover
+
+    /// Fires once at the next local midnight to recompute `today` so the list resets to a clean
+    /// slate at the day boundary even while the app stays open. Reschedules itself for the day after.
+    private func scheduleMidnightRefresh() {
+        dayRolloverTimer?.invalidate()
+        let calendar = Calendar.current
+        let nextMidnight = calendar.nextDate(
+            after: Date(),
+            matching: DateComponents(hour: 0, minute: 0, second: 0),
+            matchingPolicy: .nextTime
+        ) ?? Date().addingTimeInterval(24 * 3600)
+
+        let timer = Timer(fire: nextMidnight, interval: 0, repeats: false) { [weak self] _ in
+            Task { @MainActor in
+                guard let self else { return }
+                await self.refreshRecent()
+                self.scheduleMidnightRefresh()
+            }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        dayRolloverTimer = timer
     }
 
     // MARK: - Last project memory

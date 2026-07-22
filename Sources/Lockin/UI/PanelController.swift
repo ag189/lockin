@@ -15,6 +15,10 @@ final class PanelController {
     private var clickMonitor: Any?
     private var keyMonitor: Any?
 
+    /// Called just before the panel is shown, so the model can refresh time-sensitive state
+    /// (e.g. recompute today's list after a day rollover).
+    var onWillShow: (() -> Void)?
+
     var isVisible: Bool { panel.isVisible }
 
     init<Content: View>(rootView: Content, statusButton: NSStatusBarButton?) {
@@ -38,6 +42,7 @@ final class PanelController {
     }
 
     func show() {
+        onWillShow?()
         reposition()
         NSApp.activate(ignoringOtherApps: true)
         panel.makeKeyAndOrderFront(nil)

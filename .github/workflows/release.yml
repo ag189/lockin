@@ -1,0 +1,50 @@
+name: Release
+
+# Builds Lockin.app + a drag-to-Applications DMG and attaches it to a GitHub Release whenever a
+# version tag (e.g. v1.0.0) is pushed. The DMG is ad-hoc signed (no Apple Developer ID), so on
+# first launch users must right-click the app and choose Open (see README).
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode.app
+
+      - name: Show toolchain
+        run: swift --version
+
+      - name: Run self-test
+        run: |
+          swift build
+          ./.build/debug/Lockin --selftest
+
+      - name: Build app bundle
+        run: scripts/build_app.sh
+
+      - name: Package DMG
+        run: scripts/package_dmg.sh
+
+      - name: Upload DMG to release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/Lockin.dmg
+          generate_release_notes: true
+
+      - name: Upload DMG artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Lockin-dmg
+          path: build/Lockin.dmg

@@ -34,6 +34,12 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/$APP_NAME"
 cp "$ROOT/Resources/Info.plist" "$APP/Contents/Info.plist"
 
+if [ ! -f "$ROOT/Resources/AppIcon.icns" ]; then
+    echo "==> Generating app icon"
+    "$ROOT/scripts/make_icon.sh"
+fi
+cp "$ROOT/Resources/AppIcon.icns" "$APP/Contents/Resources/AppIcon.icns"
+
 echo "==> Signing ($SIGN_IDENTITY)"
 codesign --force --deep --options runtime \
     --sign "$SIGN_IDENTITY" \

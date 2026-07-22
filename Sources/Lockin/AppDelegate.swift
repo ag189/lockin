@@ -41,6 +41,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         model.repositionPopover = { [weak self] in
             self?.panelController.reposition()
         }
+        panelController.onWillShow = { [weak self] in
+            Task { await self?.model.refreshRecent() }
+        }
 
         HotkeyCenter.shared.setHandler(for: .startStop) { [weak self] in
             self?.model.handleStartStopHotkey()

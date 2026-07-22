@@ -93,6 +93,12 @@ final class StoreTests: XCTestCase {
         // Cutoff in the past keeps the work visible.
         let past = try await store.todayTasks(clearedAt: Date().addingTimeInterval(-3600))
         XCTAssertTrue(past.contains { $0.taskId == task.id! })
+
+        // A stale clear from a previous day is superseded by today's start-of-day floor, so
+        // today's work still shows (the daily auto-reset behaviour).
+        let yesterday = Date().addingTimeInterval(-24 * 3600)
+        let freshDay = try await store.todayTasks(clearedAt: yesterday)
+        XCTAssertTrue(freshDay.contains { $0.taskId == task.id! })
     }
 
     func testOutputAndSyncPayload() async throws {

@@ -53,8 +53,9 @@ final class StatusItemController {
         button.imagePosition = .imageLeading
 
         guard let active = model.active else {
-            button.attributedTitle = NSAttributedString(string: "")
-            statusItem.length = NSStatusItem.variableLength
+            // Idle: no running task, so the timer reads a reset 0:00 with an idle (blue) dot.
+            button.attributedTitle = label(dot: "●", dotColor: NSColor(hex: Palette.idleColor), time: "0:00")
+            statusItem.length = max(72, button.attributedTitle.size().width + 40)
             return
         }
 
@@ -74,23 +75,29 @@ final class StatusItemController {
             timeString = TimeFormatting.clock(model.elapsed)
         }
 
+        let result = label(dot: dot, dotColor: NSColor(hex: Palette.runningColor), time: "\(timeString)\(suffix)")
+        button.attributedTitle = result
+        // Force enough room for icon + countdown; variableLength alone sometimes clips to icon-only.
+        statusItem.length = max(72, result.size().width + 40)
+    }
+
+    /// Builds the "● 0:00" style label: a colored state dot followed by monospaced time text.
+    private func label(dot: String, dotColor: NSColor, time: String) -> NSAttributedString {
         let result = NSMutableAttributedString()
         result.append(NSAttributedString(
             string: " \(dot)",
             attributes: [
-                .foregroundColor: NSColor(hex: active.colorHex),
+                .foregroundColor: dotColor,
                 .font: NSFont.systemFont(ofSize: NSFont.systemFontSize)
             ]
         ))
         result.append(NSAttributedString(
-            string: " \(timeString)\(suffix)",
+            string: " \(time)",
             attributes: [
                 .foregroundColor: NSColor.labelColor,
                 .font: Self.timeFont
             ]
         ))
-        button.attributedTitle = result
-        // Force enough room for icon + countdown; variableLength alone sometimes clips to icon-only.
-        statusItem.length = max(72, result.size().width + 40)
+        return result
     }
 }
