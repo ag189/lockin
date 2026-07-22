@@ -74,8 +74,8 @@ final class AppModel: ObservableObject {
     // MARK: - Bootstrap
 
     func bootstrap() async {
-        await sync.setPendingCountHandler { [weak self] count in
-            Task { @MainActor in self?.pendingSyncCount = count }
+        await sync.setPendingCountHandler { count in
+            Task { @MainActor [weak self] in self?.pendingSyncCount = count }
         }
         await resumeRunningSession()
         await reloadCatalog()
@@ -376,8 +376,8 @@ final class AppModel: ObservableObject {
         stopTicking()
         guard active != nil else { return }
         recomputeElapsed()
-        let timer = Timer(timeInterval: 1.0, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.recomputeElapsed() }
+        let timer = Timer(timeInterval: 1.0, repeats: true) { _ in
+            Task { @MainActor [weak self] in self?.recomputeElapsed() }
         }
         RunLoop.main.add(timer, forMode: .common)
         tickTimer = timer
@@ -452,8 +452,8 @@ final class AppModel: ObservableObject {
 
     private func startRetryTimer() {
         retryTimer?.invalidate()
-        let timer = Timer(timeInterval: 600, repeats: true) { [weak self] _ in
-            Task { @MainActor in
+        let timer = Timer(timeInterval: 600, repeats: true) { _ in
+            Task { @MainActor [weak self] in
                 guard let self else { return }
                 if self.pendingSyncCount > 0 {
                     await self.sync.syncPending()
@@ -477,8 +477,8 @@ final class AppModel: ObservableObject {
             matchingPolicy: .nextTime
         ) ?? Date().addingTimeInterval(24 * 3600)
 
-        let timer = Timer(fire: nextMidnight, interval: 0, repeats: false) { [weak self] _ in
-            Task { @MainActor in
+        let timer = Timer(fire: nextMidnight, interval: 0, repeats: false) { _ in
+            Task { @MainActor [weak self] in
                 guard let self else { return }
                 await self.refreshRecent()
                 self.scheduleMidnightRefresh()
