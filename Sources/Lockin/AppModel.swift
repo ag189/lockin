@@ -15,6 +15,14 @@ struct ActiveSession: Equatable {
     var startedAt: Date
     var kind: SessionKind
     var targetMin: Int?
+    /// Optional pomodoro layer on an open-ended work session.
+    var pomodoroTargetMin: Int?
+    var pomodoroStartedAt: Date?
+    
+    // For pausing
+    var isPaused: Bool = false
+    var accumulatedElapsed: TimeInterval = 0
+    var accumulatedPomodoroElapsed: TimeInterval = 0
 }
 
 /// What the popover is currently showing.
@@ -39,6 +47,8 @@ final class AppModel: ObservableObject {
     @Published private(set) var startError: String?
     /// True while the pomodoro-complete alarm is looping and awaiting silence.
     @Published private(set) var alarmActive = false
+    /// Whether the floating timer overlay should be shown if a session is active.
+    @Published var overlayVisible = true
 
     private let alarm = AlarmPlayer()
 
@@ -151,8 +161,27 @@ final class AppModel: ObservableObject {
     }
 
     /// Starts a pomodoro (countdown + alarm) of the given length on the typed query or top hit.
+    /// If a work session is already running, the pomodoro is layered on top of it so the task
+    /// timer keeps counting while the pomodoro counts down.
     func startPomodoro(minutes: Int, query: String) {
         pomodoroMinutes = min(max(minutes, 1), 600)
+
+        if let current = active {
+            if current.kind == .pomodoro {
+                // Replace an existing standalone pomodoro by restarting it for the same task.
+                Task { await start(taskId: current.taskId, projectName: current.projectName, taskName: current.taskName, colorHex: current.colorHex, asPomodoro: true) }
+                return
+            }
+            var overlay = current
+            overlay.pomodoroStartedAt = Date()
+            overlay.pomodoroTargetMin = pomodoroMinutes
+            active = overlay
+            notifiedOverrun = false
+            silenceAlarm()
+            startTicking()
+            return
+        }
+
         startFromQuery(query, asPomodoro: true)
     }
 
@@ -313,7 +342,9 @@ final class AppModel: ObservableObject {
         active = nil
         elapsed = 0
         Task {
-            _ = try? await store.stopSession(id: current.id)
+            if !current.isPaused {
+                _ = try? await store.stopSession(id: current.id)
+            }
             if promptOutput {
                 screen = .output(sessionId: current.id, taskId: current.taskId, label: current.taskName)
             } else {
@@ -321,6 +352,45 @@ final class AppModel: ObservableObject {
             }
             await sync.syncPending()
             await refreshRecent()
+        }
+    }
+
+    func pause() {
+        guard var current = active, !current.isPaused else { return }
+        silenceAlarm()
+        stopTicking()
+        recomputeElapsed()
+        current.accumulatedElapsed = elapsed
+        if let start = current.pomodoroStartedAt {
+            current.accumulatedPomodoroElapsed += Date().timeIntervalSince(start)
+        }
+        current.isPaused = true
+        active = current
+        Task {
+            _ = try? await store.stopSession(id: current.id)
+            await sync.syncPending()
+            await refreshRecent()
+        }
+    }
+
+    func resumeSession() {
+        guard var current = active, current.isPaused else { return }
+        Task {
+            do {
+                let session = try await store.startSession(taskId: current.taskId, kind: current.kind, targetMin: current.targetMin)
+                guard let id = session.id, let started = DateISO.date(from: session.startedAt) else { return }
+                current.id = id
+                current.startedAt = started
+                if current.pomodoroStartedAt != nil {
+                    current.pomodoroStartedAt = started
+                }
+                current.isPaused = false
+                active = current
+                startTicking()
+                await refreshRecent()
+            } catch {
+                log.error("Resume failed: \(error.localizedDescription, privacy: .public)")
+            }
         }
     }
 
@@ -393,10 +463,25 @@ final class AppModel: ObservableObject {
             elapsed = 0
             return
         }
-        elapsed = Date().timeIntervalSince(active.startedAt)
+        if active.isPaused { return }
+        
+        elapsed = active.accumulatedElapsed + Date().timeIntervalSince(active.startedAt)
 
-        if active.kind == .pomodoro, let target = active.targetMin, !notifiedOverrun,
-           elapsed >= Double(target * 60) {
+        let pomodoroElapsed: TimeInterval?
+        let pomodoroTarget: Int?
+        if active.kind == .pomodoro {
+            pomodoroElapsed = elapsed
+            pomodoroTarget = active.targetMin
+        } else if let pomodoroStart = active.pomodoroStartedAt {
+            pomodoroElapsed = active.accumulatedPomodoroElapsed + Date().timeIntervalSince(pomodoroStart)
+            pomodoroTarget = active.pomodoroTargetMin
+        } else {
+            pomodoroElapsed = nil
+            pomodoroTarget = nil
+        }
+
+        if let target = pomodoroTarget, let pomodoroElapsed, !notifiedOverrun,
+           pomodoroElapsed >= Double(target * 60) {
             notifiedOverrun = true
             startAlarm(for: active)
         }
@@ -418,8 +503,15 @@ final class AppModel: ObservableObject {
     }
 
     var isPomodoroOverrun: Bool {
-        guard let active, active.kind == .pomodoro, let target = active.targetMin else { return false }
-        return elapsed >= Double(target * 60)
+        guard let active else { return false }
+        if active.kind == .pomodoro, let target = active.targetMin {
+            return elapsed >= Double(target * 60)
+        }
+        if let target = active.pomodoroTargetMin, let start = active.pomodoroStartedAt {
+            let pomodoroElapsed = active.accumulatedPomodoroElapsed + (active.isPaused ? 0 : Date().timeIntervalSince(start))
+            return pomodoroElapsed >= Double(target * 60)
+        }
+        return false
     }
 
     // MARK: - Power / lock observers

@@ -9,6 +9,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var model: AppModel!
     private var statusController: StatusItemController!
     private var panelController: PanelController!
+    private var floatingController: FloatingTimerController!
     private var welcomeWindow: NSWindow?
 
     private let log = Logger(subsystem: "com.lockin.app", category: "app")
@@ -31,6 +32,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             rootView: PopoverRootView().environmentObject(model),
             statusButton: statusController.button
         )
+        floatingController = FloatingTimerController(model: model)
 
         statusController.onClick = { [weak self] in
             self?.panelController.toggle()

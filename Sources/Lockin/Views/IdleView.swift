@@ -214,7 +214,7 @@ struct IdleView: View {
                     .controlSize(.small)
             }
 
-            Text("Preset buttons start a countdown pomodoro on the typed task (clicking a task is an open-ended stopwatch).")
+            Text("Preset buttons start a countdown pomodoro on the typed or currently running task (clicking a task is an open-ended stopwatch).")
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -222,7 +222,7 @@ struct IdleView: View {
     }
 
     private func startPomodoro(minutes: Int) {
-        guard hasTaskName else {
+        guard hasTaskName || model.active != nil else {
             startHint = "Type a task name above before starting the timer."
             searchFocused = true
             return

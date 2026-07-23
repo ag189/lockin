@@ -35,6 +35,10 @@ struct RunningHeader: View {
                         Button("Silence") { model.silenceAlarm() }
                             .controlSize(.small)
                     }
+                    if !model.overlayVisible {
+                        Button("Show Overlay") { model.overlayVisible = true }
+                            .controlSize(.small)
+                    }
                     Spacer()
                 }
             }
@@ -48,6 +52,13 @@ struct RunningHeader: View {
         var parts = ["started \(started(active))"]
         if active.kind == .pomodoro, let target = active.targetMin {
             parts.insert(model.isPomodoroOverrun ? "\(target)m pomodoro · over" : "\(target)m pomodoro", at: 0)
+        } else if let target = active.pomodoroTargetMin, let _ = active.pomodoroStartedAt {
+            let label = "\(target)m pomodoro"
+            if model.isPomodoroOverrun {
+                parts.insert("\(label) · over", at: 0)
+            } else {
+                parts.insert("\(label) · \(TimeFormatting.clock(model.elapsed)) running", at: 0)
+            }
         }
         return parts.joined(separator: " · ")
     }
@@ -55,6 +66,10 @@ struct RunningHeader: View {
     private func clockText(_ active: ActiveSession) -> String {
         if active.kind == .pomodoro, let target = active.targetMin, !model.isPomodoroOverrun {
             return TimeFormatting.clock(Double(target * 60) - model.elapsed)
+        }
+        if let target = active.pomodoroTargetMin, let start = active.pomodoroStartedAt, !model.isPomodoroOverrun {
+            let remaining = max(0, Double(target * 60) - Date().timeIntervalSince(start))
+            return TimeFormatting.clock(remaining)
         }
         return TimeFormatting.clock(model.elapsed)
     }
