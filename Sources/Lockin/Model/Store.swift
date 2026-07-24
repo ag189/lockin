@@ -295,6 +295,28 @@ final class Store {
         }
         return Int(total)
     }
+    
+    /// Sum of completed-session durations for a task before the given ISO instant.
+    func historicalSeconds(taskId: Int64, before: Date) async throws -> Int {
+        let beforeISO = DateISO.string(from: before)
+        return try await writer.read { db in
+            let sessions = try Session
+                .filter(Session.Columns.taskId == taskId)
+                .filter(Session.Columns.startedAt < beforeISO)
+                .fetchAll(db)
+            var total = 0.0
+            for s in sessions {
+                guard let start = DateISO.date(from: s.startedAt) else { continue }
+                // Only count sessions that have ended, or cap at 'before' if somehow left dangling
+                let end = s.endedAt.flatMap { DateISO.date(from: $0) } ?? before
+                let duration = end.timeIntervalSince(start)
+                if duration > 0 {
+                    total += duration
+                }
+            }
+            return Int(total)
+        }
+    }
 
     // MARK: - Sessions
 

@@ -7,11 +7,26 @@ struct FloatingTimerView: View {
         ZStack {
             if let active = model.active {
                 VStack(alignment: .leading, spacing: 12) {
-                    // Line 1: Task name
-                    Text(active.taskName)
-                        .font(.system(size: 14, weight: .medium))
-                        .lineLimit(nil)
-                        .fixedSize(horizontal: false, vertical: true)
+                    // Line 1: Task name + Total Timer
+                    HStack(alignment: .top) {
+                        Text(active.taskName)
+                            .font(.system(size: 14, weight: .medium))
+                            .lineLimit(nil)
+                            .fixedSize(horizontal: false, vertical: true)
+                        
+                        Spacer()
+                        
+                        let total = active.historicalSeconds + model.elapsed
+                        if total > 0 {
+                            Text(TimeFormatting.clock(total))
+                                .font(.system(size: 11, weight: .bold).monospacedDigit())
+                                .foregroundColor(.yellow)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Color.yellow.opacity(0.15))
+                                .cornerRadius(4)
+                        }
+                    }
                     
                     // Line 2: Timer + Controls
                     HStack {

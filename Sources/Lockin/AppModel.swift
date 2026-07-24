@@ -23,6 +23,9 @@ struct ActiveSession: Equatable {
     var isPaused: Bool = false
     var accumulatedElapsed: TimeInterval = 0
     var accumulatedPomodoroElapsed: TimeInterval = 0
+    
+    // Historical time spent on this task prior to the current session sequence
+    var historicalSeconds: TimeInterval = 0
 }
 
 /// What the popover is currently showing.
@@ -103,6 +106,8 @@ final class AppModel: ObservableObject {
                   let detail = try await store.taskDetail(taskId: session.taskId),
                   let started = DateISO.date(from: session.startedAt) else { return }
 
+            let hist = (try? await store.historicalSeconds(taskId: session.taskId, before: started)) ?? 0
+            
             let resumed = ActiveSession(
                 id: id,
                 taskId: session.taskId,
@@ -111,7 +116,8 @@ final class AppModel: ObservableObject {
                 colorHex: detail.colorHex,
                 startedAt: started,
                 kind: SessionKind(rawValue: session.kind) ?? .work,
-                targetMin: session.targetMin
+                targetMin: session.targetMin,
+                historicalSeconds: TimeInterval(hist)
             )
 
             // Long-running guard: over 12 hours, ask once rather than silently continue or close.
@@ -175,6 +181,7 @@ final class AppModel: ObservableObject {
             var overlay = current
             overlay.pomodoroStartedAt = Date()
             overlay.pomodoroTargetMin = pomodoroMinutes
+            overlay.accumulatedPomodoroElapsed = 0
             active = overlay
             notifiedOverrun = false
             silenceAlarm()
@@ -307,6 +314,8 @@ final class AppModel: ObservableObject {
                 startError = "Could not start: invalid session data."
                 return
             }
+            let hist = (try? await store.historicalSeconds(taskId: taskId, before: started)) ?? 0
+            
             setLastProject(projectName)
             // Prime elapsed so the first menu-bar render shows the correct time immediately.
             elapsed = Date().timeIntervalSince(started)
@@ -318,7 +327,8 @@ final class AppModel: ObservableObject {
                 colorHex: colorHex,
                 startedAt: started,
                 kind: kind,
-                targetMin: target
+                targetMin: target,
+                historicalSeconds: TimeInterval(hist)
             )
             notifiedOverrun = false
             screen = .main
